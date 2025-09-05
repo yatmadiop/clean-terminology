@@ -1,0 +1,63 @@
+import pandas as pd
+import xml.etree.ElementTree as ET
+
+def extract_cim10_terms(xml_file, csv_file):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    # Build a mapping from code to preferred label for category classes only
+    code_to_label = {}
+    for cls in root.findall('.//Class'):
+        if cls.get('kind') != 'category':
+            continue
+        code = cls.get('code')
+        label = None
+        for rubric in cls.findall('Rubric'):
+            if rubric.get('kind') == 'preferred':
+                label_elem = rubric.find('Label')
+                if label_elem is not None:
+                    label = label_elem.text.strip()
+                    break
+        if code and label:
+            code_to_label[code] = label
+
+    rows = []
+    for cls in root.findall('.//Class'):
+        if cls.get('kind') != 'category':
+            continue
+        code = cls.get('code')
+        display = None
+        # Find preferred label
+        for rubric in cls.findall('Rubric'):
+            if rubric.get('kind') == 'preferred':
+                label_elem = rubric.find('Label')
+                if label_elem is not None:
+                    display = label_elem.text.strip()
+                    break
+        # If superclass exists, combine labels only if code starts with C or D
+        superclass = cls.find('SuperClass')
+        super_code = superclass.get('code') if superclass is not None else None
+        super_label = None
+        super_first_word = ""
+        display_first_word = display.split()[0] if display else ""
+        if superclass is not None and code and super_code:
+            if (code[0] in ('C', 'D')) or (super_code and super_code[0] != code[0]):
+                super_label = code_to_label.get(super_code)
+            # Avoid prefixing if both labels start with the same word (e.g., "Mélanome")
+            if super_label and display:
+                super_first_word = super_label.split()[0] if super_label else ""
+            if super_label and super_first_word.lower() != display_first_word.lower():
+                display = f"{super_label} - {display}"
+        # If no superclass or no super_label, just use the class label
+        if code and display:
+            rows.append({
+            'code': code,
+            'display': display,
+            'system': 'https://www.atih.sante.fr/cim-10-fr-usage-pmsi'
+            })
+
+    df = pd.DataFrame(rows)
+    df.to_csv(csv_file, index=False, encoding='utf-8')
+
+# Exemple d'utilisation :
+extract_cim10_terms('data/cim10frfm2025syst_claml_20241216.xml', 'cim10_terms.csv')
