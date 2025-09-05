@@ -1,0 +1,34 @@
+import pandas as pd
+from deep_translator import GoogleTranslator
+import pandas as pd
+
+# Charger le fichier CONCEPT.csv avec séparateur tabulation
+df = pd.read_csv('CONCEPT.csv', sep='\t')
+
+# Filtrer selon les critères
+df_filtered = df[
+    (df['vocabulary_id'] == 'LOINC') &
+    (df['concept_class_id'].isin(['Clinical Observation', 'Lab Test']))
+]
+
+# Garder et renommer les champs
+df_result = df_filtered[['concept_code', 'concept_name']].rename(
+    columns={'concept_code': 'code', 'concept_name': 'display'}
+)
+
+# Ajouter le champ system
+df_result['system'] = 'http://loinc.org'
+
+# Afficher ou sauvegarder le résultat
+print(df_result.head(5))
+df_result.to_csv('loinc_co_lt.csv', index=False)
+
+# Charger le CSV original
+df = pd.read_csv("loinc_clean.csv")
+
+# Traduire la colonne 'display' vers le français
+translator = GoogleTranslator(source='auto', target='fr')
+df['display_fr'] = df['display'].apply(lambda text: translator.translate(text) if pd.notnull(text) else "")
+
+# Sauvegarder le CSV final avec les deux colonnes
+df.to_csv("loinc_clean_fr.csv", index=False)
